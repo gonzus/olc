@@ -1,13 +1,12 @@
 #include <stdio.h>
 #include "olc.h"
 
-int main()
+int main(int argc, char* argv[])
 {
     char code[256];
     int len;
     OLC_LatLon location;
 
-#if 1
     // Encodes latitude and longitude into a Plus+Code.
     location.lat = 47.0000625;
     location.lon =  8.0000625;
@@ -42,7 +41,6 @@ int main()
     int is_short = IsShort(code);
     printf("Is Short: %d\n", is_short);
     // => true
-#endif
 
     // Shorten a Plus+Codes if possible by the given reference latitude and
     // longitude.

@@ -14,19 +14,18 @@ static int test_short_code(const char* line, char* cp[], int cn);
 static int test_encoding(const char* line, char* cp[], int cn);
 static int test_validity(const char* line, char* cp[], int cn);
 
-int main()
+int main(int argc, char* argv[])
 {
     struct Data {
         const char* file;
         TestFunc* func;
     } data[] = {
         { "shortCodeTests.csv", test_short_code },
-        { "encodingTests.csv", test_encoding },
-        { "validityTests.csv", test_validity },
+        { "encodingTests.csv" , test_encoding   },
+        { "validityTests.csv" , test_validity   },
     };
     for (int j = 0; j < sizeof(data) / sizeof(data[0]); ++j) {
-        int records = process_file(data[j].file, data[j].func);
-        printf("%s => %d records\n", data[j].file, records);
+        process_file(data[j].file, data[j].func);
     }
 
     return 0;
@@ -83,6 +82,7 @@ static int process_file(const char* file, TestFunc func)
         ++count;
     }
     fclose(fp);
+    printf("============ %s => %d records ============\n", file, count);
     return count;
 }
 
@@ -99,9 +99,7 @@ static int test_encoding(const char* line, char* cp[], int cn)
     char* code = cp[0];
     int len = CodeLength(code);
 
-    OLC_LatLon data_pos;
-    data_pos.lat = strtod(cp[1], 0);
-    data_pos.lon = strtod(cp[2], 0);
+    OLC_LatLon data_pos = { strtod(cp[1], 0), strtod(cp[2], 0) };
 
     // Encode the test location and make sure we get the expected code.
     char encoded[256];
@@ -110,12 +108,11 @@ static int test_encoding(const char* line, char* cp[], int cn)
     printf("%-3.3s CODE [%s] [%s]\n", ok ? "OK" : "BAD", encoded, code);
 
     // Now decode the code and check we get the correct coordinates.
-    OLC_CodeArea data_area;
-    data_area.lo.lat = strtod(cp[3], 0);
-    data_area.lo.lon = strtod(cp[4], 0);
-    data_area.hi.lat = strtod(cp[5], 0);
-    data_area.hi.lon = strtod(cp[6], 0);
-    data_area.len = len;
+    OLC_CodeArea data_area = {
+        { strtod(cp[3], 0), strtod(cp[4], 0) },
+        { strtod(cp[5], 0), strtod(cp[6], 0) },
+        len,
+    };
 
     OLC_LatLon data_center;
     GetCenter(&data_area, &data_center);
@@ -149,9 +146,7 @@ static int test_short_code(const char* line, char* cp[], int cn)
     char* short_code = cp[3];
     char* type = cp[4];
 
-    OLC_LatLon reference;
-    reference.lat = strtod(cp[1], 0);
-    reference.lon = strtod(cp[2], 0);
+    OLC_LatLon reference = { strtod(cp[1], 0), strtod(cp[2], 0) };
 
     // Shorten the code using the reference location and check.
     if (strcmp(type, "B") == 0 || strcmp(type, "S") == 0) {
