@@ -1,3 +1,5 @@
+all: example test_csv
+
 CPPFLAGS += -DMEM_CHECK=1
 
 CFLAGS += -std=c99
@@ -10,9 +12,13 @@ ALL_FLAGS += -g
 %.o : %.c
 	$(CC) -c $(ALL_FLAGS) $(CFLAGS) $(CPPFLAGS) -o $@ $<
 
-gonzo: codearea.o olc.o example.o
+example: codearea.o olc.o example.o
+	$(CC) $(ALL_FLAGS) $^ -o $@
+
+test_csv: codearea.o olc.o test_csv.o
 	$(CC) $(ALL_FLAGS) $^ -o $@
 
 clean:
 	rm -f *.o
-	rm -f gonzo
+	rm -f example
+	rm -f test_csv
