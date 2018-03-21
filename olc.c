@@ -5,7 +5,6 @@
 
 static int sanitize(const char* code, char* sanitized, int maxlen,
                     int* first_sep, int* first_pad);
-static int is_valid(const char* sanitized, int len);
 static int is_short(const char* sanitized, int len, int first_sep);
 static int is_full(const char* sanitized, int len, int first_sep);
 static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_CodeArea* decoded);
@@ -60,19 +59,19 @@ static double pow_neg(double base, double exponent)
         return pow(base, exponent);
     }
 
-    return 1 / pow(base, fabs(exponent));
+    return 1 / pow(base, -exponent);
 }
 
 // Compute the latitude precision value for a given code length. Lengths <= 10
 // have the same precision for latitude and longitude, but lengths > 10 have
 // different precisions due to the grid method having fewer columns than rows.
-static double compute_precision_for_length(int code_length)
+static double compute_precision_for_length(int length)
 {
-    if (code_length <= 10) {
-        return pow_neg(kEncodingBase, floor((code_length / -2) + 2));
+    if (length <= 10) {
+        return pow_neg(kEncodingBase, floor((length / -2) + 2));
     }
 
-    return pow_neg(kEncodingBase, -3) / pow(5, code_length - 10);
+    return pow_neg(kEncodingBase, -3) / pow(5, length - 10);
 }
 
 // Finds the position of a char in the encoding alphabet.
@@ -90,17 +89,17 @@ static int get_alphabet_position(char c)
 static double normalize_longitude(double lon_degrees)
 {
     while (lon_degrees < -kLonMaxDegrees) {
-        lon_degrees += 360;
+        lon_degrees += 360.0;
     }
     while (lon_degrees >= kLonMaxDegrees) {
-        lon_degrees -= 360;
+        lon_degrees -= 360.0;
     }
     return lon_degrees;
 }
 
 // Adjusts 90 degree latitude to be lower so that a legal OLC code can be
 // generated.
-static double adjust_latitude(double lat_degrees, size_t code_length)
+static double adjust_latitude(double lat_degrees, size_t length)
 {
     if (lat_degrees < -90.0) {
         lat_degrees = -90.0;
@@ -112,17 +111,17 @@ static double adjust_latitude(double lat_degrees, size_t code_length)
         return lat_degrees;
     }
     // Subtract half the code precision to get the latitude into the code area.
-    double precision = compute_precision_for_length(code_length);
+    double precision = compute_precision_for_length(length);
     return lat_degrees - precision / 2;
 }
 
-// Encodes positive range lat,lng into a sequence of OLC lat/lng pairs.
+// Encodes positive range lat,lon into a sequence of OLC lat/lon pairs.
 // This uses pairs of characters (latitude and longitude in that order) to
 // represent each step in a 20x20 grid. Each code, therefore, has 1/400th
 // the area of the previous code.
-int EncodePairs(double lat, double lng, size_t code_length, char* code, int maxlen)
+int EncodePairs(double lat, double lon, size_t length, char* code, int maxlen)
 {
-    if ((code_length + 1) >= maxlen) {
+    if ((length + 1) >= maxlen) {
         code[0] = '\0';
         return 0;
     }
@@ -132,7 +131,7 @@ int EncodePairs(double lat, double lng, size_t code_length, char* code, int maxl
     double resolution_degrees = pow(kEncodingBase, kInitialExponent);
     // Add two digits on each pass.
     for (size_t digit_count = 0;
-         digit_count < code_length;
+         digit_count < length;
          digit_count += 2, resolution_degrees /= kEncodingBase) {
         size_t digit_value;
 
@@ -144,12 +143,12 @@ int EncodePairs(double lat, double lng, size_t code_length, char* code, int maxl
 
         // Do the longitude - gets the digit for this place and subtracts that
         // for the next digit.
-        digit_value = floor(lng / resolution_degrees);
-        lng -= digit_value * resolution_degrees;
+        digit_value = floor(lon / resolution_degrees);
+        lon -= digit_value * resolution_degrees;
         code[pos++] = kAlphabet[digit_value];
 
         // Should we add a separator here?
-        if (pos == kSeparatorPosition && pos < code_length) {
+        if (pos == kSeparatorPosition && pos < length) {
             code[pos++] = kSeparator;
         }
     }
@@ -174,63 +173,63 @@ int EncodePairs(double lat, double lng, size_t code_length, char* code, int maxl
 //   2 3 4 5
 // This allows default accuracy OLC codes to be refined with just a single
 // character.
-int EncodeGrid(double lat, double lng, size_t code_length, char* code, int maxlen)
+int EncodeGrid(double lat, double lon, size_t length, char* code, int maxlen)
 {
-    if ((code_length + 1) >= maxlen) {
+    if ((length + 1) >= maxlen) {
         code[0] = '\0';
         return 0;
     }
     init_constants();
     int pos = 0;
     double lat_grid_size = kGridSizeDegrees;
-    double lng_grid_size = kGridSizeDegrees;
+    double lon_grid_size = kGridSizeDegrees;
 
     // To avoid problems with floating point, get rid of the degrees.
     lat = fmod(lat, 1);
-    lng = fmod(lng, 1);
+    lon = fmod(lon, 1);
     lat = fmod(lat, lat_grid_size);
-    lng = fmod(lng, lng_grid_size);
-    for (size_t i = 0; i < code_length; i++) {
+    lon = fmod(lon, lon_grid_size);
+    for (size_t i = 0; i < length; i++) {
         // The following clause should never execute because of maximum code
         // length enforcement in other functions, but is here to prevent
         // division-by-zero crash from underflow.
         if ((lat_grid_size / kGridRows) <= DBL_MIN ||
-            (lng_grid_size / kGridCols) <= DBL_MIN) {
+            (lon_grid_size / kGridCols) <= DBL_MIN) {
             continue;
         }
         // Work out the row and column.
         size_t row = floor(lat / (lat_grid_size / kGridRows));
-        size_t col = floor(lng / (lng_grid_size / kGridCols));
+        size_t col = floor(lon / (lon_grid_size / kGridCols));
         lat_grid_size /= kGridRows;
-        lng_grid_size /= kGridCols;
+        lon_grid_size /= kGridCols;
         lat -= row * lat_grid_size;
-        lng -= col * lng_grid_size;
+        lon -= col * lon_grid_size;
         code[pos++] = kAlphabet[row * kGridCols + col];
     }
     code[pos] = '\0';
     return pos;
 }
 
-int Encode(const OLC_LatLon* location, size_t code_length, char* code, int maxlen)
+int Encode(const OLC_LatLon* location, size_t length, char* code, int maxlen)
 {
     int pos = 0;
 
     // Limit the maximum number of digits in the code.
-    if (code_length > kMaximumDigitCount) {
-        code_length = kMaximumDigitCount;
+    if (length > kMaximumDigitCount) {
+        length = kMaximumDigitCount;
     }
 
     // Adjust latitude and longitude so they fall into positive ranges.
-    double lat = adjust_latitude(location->lat, code_length) + kLatMaxDegrees;
+    double lat = adjust_latitude(location->lat, length) + kLatMaxDegrees;
     double lon = normalize_longitude(location->lon) + kLonMaxDegrees;
-    size_t tmp = code_length;
-    if (tmp > kPairCodeLength) {
-        tmp = kPairCodeLength;
+    size_t len = length;
+    if (len > kPairCodeLength) {
+        len = kPairCodeLength;
     }
-    pos += EncodePairs(lat, lon, tmp, code + pos, maxlen - pos);
+    pos += EncodePairs(lat, lon, len, code + pos, maxlen - pos);
     // If the requested length indicates we want grid refined codes.
-    if (code_length > kPairCodeLength) {
-        pos += EncodeGrid(lat, lon, code_length - kPairCodeLength, code + pos, maxlen - pos);
+    if (length > kPairCodeLength) {
+        pos += EncodeGrid(lat, lon, length - kPairCodeLength, code + pos, maxlen - pos);
     }
     code[pos] = '\0';
     return pos;
@@ -244,8 +243,8 @@ int EncodeDefault(const OLC_LatLon* location, char* code, int maxlen)
 int Decode(const char* code, OLC_CodeArea* decoded)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
     if (len <= 0) {
         return 0;
@@ -254,16 +253,15 @@ int Decode(const char* code, OLC_CodeArea* decoded)
     return decode(sanitized, len, first_sep, first_pad, decoded);
 }
 
-int Shorten(const char* code, const OLC_LatLon* reference_location, char* shortened, int maxlen)
+int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int maxlen)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
     if (len <= 0) {
         return 0;
     }
-
     if (!is_full(sanitized, len, first_sep)) {
         return 0;
     }
@@ -278,8 +276,9 @@ int Shorten(const char* code, const OLC_LatLon* reference_location, char* shorte
     OLC_CodeArea_GetCenter(&code_area, &center);
 
     // Ensure that latitude and longitude are valid.
-    double lat = adjust_latitude(reference_location->lat, len);
-    double lon = normalize_longitude(reference_location->lon);
+    double lat = adjust_latitude(reference->lat, len);
+    double lon = normalize_longitude(reference->lon);
+
     // How close are the latitude and longitude to the code center.
     double alat = fabs(center.lat - lat);
     double alon = fabs(center.lon - lon);
@@ -307,13 +306,12 @@ int Shorten(const char* code, const OLC_LatLon* reference_location, char* shorte
     return pos;
 }
 
-int RecoverNearest(const char* short_code, const OLC_LatLon* reference_location, char* code, int maxlen)
+int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* code, int maxlen)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(short_code, sanitized, 256, &first_sep, &first_pad);
-    // printf("SANITIZED [%s] => [%s] %d %d %d\n", short_code, sanitized, len, first_sep, first_pad);
     if (len <= 0) {
         return 0;
     }
@@ -324,22 +322,29 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference_location,
     }
 
     // Ensure that latitude and longitude are valid.
-    double lat = adjust_latitude(reference_location->lat, len);
-    double lon = normalize_longitude(reference_location->lon);
+    double lat = adjust_latitude(reference->lat, len);
+    double lon = normalize_longitude(reference->lon);
+
     // Compute the number of digits we need to recover.
     size_t padding_length = kSeparatorPosition - first_sep;
+
     // The resolution (height and width) of the padded area in degrees.
     double resolution = pow_neg(kEncodingBase, 2.0 - (padding_length / 2.0));
+
     // Distance from the center to an edge (in degrees).
     double half_res = resolution / 2.0;
-    // Use the reference location to pad the supplied short code and decode it.
-    OLC_LatLon latlng = {lat, lon};
-    char encoded[256];
-    EncodeDefault(&latlng, encoded, 256);
 
-    char new_code[1024];
+    // Use the reference location to pad the supplied short code and decode it.
+    OLC_LatLon latlon = {lat, lon};
+    char encoded[256];
+    EncodeDefault(&latlon, encoded, 256);
+
+    char new_code[256];
     int pos = 0;
-    for (int j = 0; j < padding_length && encoded[j] != '\0'; ++j) {
+    for (int j = 0; encoded[j] != '\0'; ++j) {
+        if (j >= padding_length) {
+            break;
+        }
         new_code[pos++] = encoded[j];
     }
     for (int j = 0; short_code[j] != '\0'; ++j) {
@@ -354,9 +359,7 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference_location,
     OLC_LatLon center;
     OLC_CodeArea_GetCenter(&code_rect, &center);
 
-    // How many degrees latitude is the code from the reference? If it is more
-    // than half the resolution, we need to move it north or south but keep it
-    // within -90 to 90 degrees.
+    // How many degrees latitude is the code from the reference?
     if (lat + half_res < center.lat && center.lat - resolution > -kLatMaxDegrees) {
         // If the proposed code is more than half a cell north of the reference location,
         // it's too far, and the best match will be one cell south.
@@ -366,32 +369,34 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference_location,
         // it's too far, and the best match will be one cell north.
         center.lat += resolution;
     }
+
     // How many degrees longitude is the code from the reference?
     if (lon + half_res < center.lon) {
         center.lon -= resolution;
     } else if (lon - half_res > center.lon) {
         center.lon += resolution;
     }
-    int gonzo = len + padding_length;
-    int returned = Encode(&center, gonzo, code, maxlen);
-    // printf("Encode(%s, %f, %f, %d, %d) => [%s]\n", short_code, center.lat, center.lon, len, padding_length, code);
-    return returned;
+
+    return Encode(&center, len + padding_length, code, maxlen);
 }
 
 int IsValid(const char* code)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
-    return is_valid(sanitized, len);
+    if (len <= 0) {
+        return 0;
+    }
+    return 1;
 }
 
 int IsShort(const char* code)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
     return is_short(sanitized, len, first_sep);
 }
@@ -399,8 +404,8 @@ int IsShort(const char* code)
 int IsFull(const char* code)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
     return is_full(sanitized, len, first_sep);
 }
@@ -408,19 +413,19 @@ int IsFull(const char* code)
 size_t CodeLength(const char* code)
 {
     char sanitized[256];
-    int first_sep = 0;
-    int first_pad = 0;
+    int first_sep = -1;
+    int first_pad = -1;
     int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
     return code_length(len, first_sep, first_pad);
 }
 
 static int sanitize(const char* code, char* sanitized, int maxlen,
-        int* first_sep, int* first_pad)
+                    int* first_sep, int* first_pad)
 {
     int len = 0;
     sanitized[0] = '\0';
-    *first_sep = 0;
-    *first_pad = 0;
+    *first_sep = -1;
+    *first_pad = -1;
 
     // null code is not valid
     if (!code) {
@@ -433,6 +438,8 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
     int sep_last = -1;
     for (int j = 0; code[j] != '\0'; ++j) {
         int found = 0;
+
+        // if this is a padding character, remember it
         if (!found && code[j] == kPaddingCharacter) {
             if (pad_first < 0) {
                 pad_first = j;
@@ -440,6 +447,8 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
             pad_last = j;
             found = 1;
         }
+
+        // if this is a separator character, remember it
         if (!found && code[j] == kSeparator) {
             if (sep_first < 0) {
                 sep_first = j;
@@ -448,14 +457,12 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
             found = 1;
         }
 
-        // is this a valid character?
-        for (int k = 0; !found && kAlphabet[k] != '\0'; ++k) {
-            if (toupper(code[j]) == kAlphabet[k]) {
-                found = 1;
-            }
+        // any invalid character messes us up
+        if (!found && get_alphabet_position(toupper(code[j])) >= 0) {
+            found = 1;
         }
 
-        // any invalid character messes us up
+        // didn't find anything expected => bail out
         if (!found) {
             sanitized[0] = '\0';
             return 0;
@@ -475,7 +482,7 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
         return 0;
     }
 
-    // There can be only one.
+    // There can be only one... separator.
     if (sep_last > sep_first) {
         return 0;
     }
@@ -486,7 +493,7 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
     }
 
     // Is the separator in an illegal position?
-    if (sep_first > kSeparatorPosition || ((sep_first % 2) == 1)) {
+    if (sep_first > kSeparatorPosition || (sep_first % 2)) {
         return 0;
     }
 
@@ -494,7 +501,7 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
     // but then it must be the final character.
     if (pad_first >= 0) {
         // The first padding character needs to be in an odd position.
-        if (pad_first == 0 || pad_first % 2) {
+        if (pad_first == 0 || (pad_first % 2)) {
             return 0;
         }
 
@@ -534,18 +541,7 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
 
     *first_sep = sep_first;
     *first_pad = pad_first;
-
-    // printf("Sanitize [%s] => [%s] %d %d %d\n", code, sanitized, len, *first_sep, *first_pad);
     return len;
-}
-
-static int is_valid(const char* sanitized, int len)
-{
-    if (len <= 0) {
-        return 0;
-    }
-
-    return 1;
 }
 
 static int is_short(const char* sanitized, int len, int first_sep)
@@ -568,7 +564,12 @@ static int is_full(const char* sanitized, int len, int first_sep)
         return 0;
     }
 
-    // If there are less characters than expected first_sep the SEPARATOR.
+    // there must be a separator
+    if (first_sep < 0) {
+        return 0;
+    }
+
+    // If there are less characters than expected before the separator.
     if (first_sep < kSeparatorPosition) {
         return 0;
     }
@@ -601,8 +602,7 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_Co
     // correct the code length at the end.
     int fixed = 0;
 
-    // Make a copy that doesn't have the separator and stops at the first padding
-    // character.
+    // If there is a separator, get rid of it by shifting all character after it.
     if (first_sep >= 0) {
         for (int j = first_sep + 1; sanitized[j] != '\0'; ++j) {
             sanitized[j-1] = sanitized[j];
@@ -613,6 +613,13 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_Co
         }
         fixed = 1;
     }
+
+    double resolution_degrees = kEncodingBase;
+    OLC_LatLon lo = { 0, 0 };
+    OLC_LatLon hi = { 0, 0 };
+
+    // Up to the first 10 characters are encoded in pairs. Subsequent characters
+    // represent grid squares.
     int top = len;
     if (first_pad >= 0) {
         top = first_pad;
@@ -620,39 +627,33 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_Co
     if (top > kPairCodeLength) {
         top = kPairCodeLength;
     }
-    // printf("Decode [%s] [%*.*s] %d %d\n", sanitized, top, top, sanitized, first_sep, first_pad);
-    double resolution_degrees = kEncodingBase;
-    double lat = 0.0;
-    double lon = 0.0;
-    double lat_high = 0.0;
-    double lon_high = 0.0;
-    // Up to the first 10 characters are encoded in pairs. Subsequent characters
-    // represent grid squares.
-    for (size_t i = 0; i < top; resolution_degrees /= kEncodingBase) {
+
+    for (size_t j = 0; j < top; resolution_degrees /= kEncodingBase) {
         double value;
 
-        // The character at i represents latitude. Retrieve it and convert to
+        // Current character represents latitude. Retrieve it and convert to
         // degrees (positive range).
-        value = get_alphabet_position(toupper(sanitized[i]));
+        value = get_alphabet_position(toupper(sanitized[j]));
         value *= resolution_degrees;
-        lat += value;
-        lat_high = lat + resolution_degrees;
-        if (i == top) {
+        lo.lat += value;
+        hi.lat = lo.lat + resolution_degrees;
+        if (j == top) {
             break;
         }
-        ++i;
+        ++j;
 
-        // The character at i + 1 represents longitude. Retrieve it and convert to
+        // Current character represents longitude. Retrieve it and convert to
         // degrees (positive range).
-        value = get_alphabet_position(toupper(sanitized[i]));
+        value = get_alphabet_position(toupper(sanitized[j]));
         value *= resolution_degrees;
-        lon += value;
-        lon_high = lon + resolution_degrees;
-        if (i == top) {
+        lo.lon += value;
+        hi.lon = lo.lon + resolution_degrees;
+        if (j == top) {
             break;
         }
-        ++i;
+        ++j;
     }
+
     if (first_pad > kPairCodeLength) {
         // Now do any grid square characters.
         // Adjust the resolution back a step because we need the resolution of the
@@ -660,41 +661,36 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_Co
         resolution_degrees *= kEncodingBase;
 
         // With a grid, the latitude and longitude resolutions are no longer equal.
-        double lat_resolution = resolution_degrees;
-        double lon_resolution = resolution_degrees;
+        OLC_LatLon resolution = { resolution_degrees, resolution_degrees };
 
         // Decode only up to the maximum digit count.
         top = len;
-        // printf("MIN: %lu %lu\n", kMaximumDigitCount, top);
         if (top > kMaximumDigitCount) {
             top = kMaximumDigitCount;
         }
-        // printf("ENTER: %lu %lu\n", kPairCodeLength, top);
-        for (size_t i = kPairCodeLength; i < top; ++i) {
-            // Get the value of the character at i and convert it to the degree value.
-            size_t value = get_alphabet_position(toupper(sanitized[i]));
+        for (size_t j = kPairCodeLength; j < top; ++j) {
+            // Get the value of the character at j and convert it to the degree value.
+            size_t value = get_alphabet_position(toupper(sanitized[j]));
             size_t row = value / kGridCols;
             size_t col = value % kGridCols;
-            // printf("GONZO: %lu %lu %lu %lu\n", i, value, row, col);
-            // Lat and lng grid sizes shouldn't underflow due to maximum code
+
+            // Lat and lon grid sizes shouldn't underflow due to maximum code
             // length enforcement, but a hypothetical underflow won't cause
             // fatal errors here.
-            lat_resolution /= kGridRows;
-            lon_resolution /= kGridCols;
-            lat += row * lat_resolution;
-            lon += col * lon_resolution;
-            lat_high = lat + lat_resolution;
-            lon_high = lon + lon_resolution;
+            resolution.lat /= kGridRows;
+            resolution.lon /= kGridCols;
+            lo.lat += row * resolution.lat;
+            lo.lon += col * resolution.lon;
+            hi.lat = lo.lat + resolution.lat;
+            hi.lon = lo.lon + resolution.lon;
         }
     }
-    // printf("CALL LEN [%s]: %d %d %d\n", sanitized, len, first_sep, first_pad);
     len = code_length(len, first_sep, first_pad);
-    // printf("GOT LEN %d\n", len);
-    decoded->lat_lo = lat - kLatMaxDegrees;
-    decoded->lon_lo = lon - kLonMaxDegrees;
-    decoded->lat_hi = lat_high - kLatMaxDegrees;
-    decoded->lon_hi = lon_high - kLonMaxDegrees;
-    decoded->code_len = len + fixed;
+    decoded->lo.lat = lo.lat - kLatMaxDegrees;
+    decoded->lo.lon = lo.lon - kLonMaxDegrees;
+    decoded->hi.lat = hi.lat - kLatMaxDegrees;
+    decoded->hi.lon = hi.lon - kLonMaxDegrees;
+    decoded->len = len + fixed;
     return len;
 }
 

@@ -24,11 +24,11 @@ int main()
     OLC_CodeArea code_area;
     Decode(code, &code_area);
     printf("Code length: %14.10f : %14.10f to %14.10f : %14.10f (%lu)\n",
-           code_area.lat_lo,
-           code_area.lon_lo,
-           code_area.lat_hi,
-           code_area.lon_hi,
-           code_area.code_len);
+           code_area.lo.lat,
+           code_area.lo.lon,
+           code_area.hi.lat,
+           code_area.hi.lon,
+           code_area.len);
     // => 47.000062496 8.00006250000001 47.000062504 8.0000625305176 16
 
     int is_valid = IsValid(code);

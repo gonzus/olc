@@ -9,11 +9,9 @@ typedef struct OLC_LatLon {
 } OLC_LatLon;
 
 typedef struct OLC_CodeArea {
-    double lat_lo;
-    double lon_lo;
-    double lat_hi;
-    double lon_hi;
-    size_t code_len;
+    OLC_LatLon lo;
+    OLC_LatLon hi;
+    size_t len;
 } OLC_CodeArea;
 
 void OLC_CodeArea_GetCenter(const OLC_CodeArea* codearea, OLC_LatLon* center);

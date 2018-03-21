@@ -123,11 +123,11 @@ static int test_encoding(const char* line, char* cp[], int cn)
 
     // Now decode the code and check we get the correct coordinates.
     OLC_CodeArea data_area;
-    data_area.lat_lo = strtod(cp[3], 0);
-    data_area.lon_lo = strtod(cp[4], 0);
-    data_area.lat_hi = strtod(cp[5], 0);
-    data_area.lon_hi = strtod(cp[6], 0);
-    data_area.code_len = len;
+    data_area.lo.lat = strtod(cp[3], 0);
+    data_area.lo.lon = strtod(cp[4], 0);
+    data_area.hi.lat = strtod(cp[5], 0);
+    data_area.hi.lon = strtod(cp[6], 0);
+    data_area.len = len;
 
     OLC_LatLon data_center;
     OLC_CodeArea_GetCenter(&data_area, &data_center);
