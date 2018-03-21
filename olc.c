@@ -312,7 +312,7 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference_location,
     char sanitized[256];
     int first_sep = 0;
     int first_pad = 0;
-    int len = sanitize(code, sanitized, 256, &first_sep, &first_pad);
+    int len = sanitize(short_code, sanitized, 256, &first_sep, &first_pad);
     // printf("SANITIZED [%s] => [%s] %d %d %d\n", short_code, sanitized, len, first_sep, first_pad);
     if (len <= 0) {
         return 0;
@@ -490,7 +490,7 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
         return 0;
     }
 
-    // We can have an even number of padding characters first_sep the separator,
+    // We can have an even number of padding characters before the separator,
     // but then it must be the final character.
     if (pad_first >= 0) {
         // The first padding character needs to be in an odd position.
@@ -503,9 +503,15 @@ static int sanitize(const char* code, char* sanitized, int maxlen,
             return 0;
         }
 
-        // Get from the first padding character to the separator
-        len = pad_first;
-        sanitized[len] = '\0';
+        // With padding, the separator must be the final character
+        if (sep_last < len - 1) {
+            return 0;
+        }
+
+        // After removing padding characters, we mustn't have anything left.
+        if (pad_last < sep_first - 1) {
+            return 0;
+        }
     }
 
     // If there are characters after the separator, make sure there isn't just
@@ -696,10 +702,9 @@ static size_t code_length(int len, int first_sep, int first_pad)
 {
     if (first_sep >= 0) {
         --len;
-        --first_pad;
     }
     if (first_pad >= 0) {
-        len -= first_pad;
+        len = first_pad;
     }
     return len;
 }

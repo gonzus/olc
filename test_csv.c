@@ -4,16 +4,16 @@
 #include <string.h>
 #include "olc.h"
 
-#define TEST_SINGLE 1
+#define TEST_SINGLE 0
 
 #define BASE_PATH "test_data"
 
 typedef int (TestFunc)(const char* line, char* cp[], int cn);
 
 static int process_file(const char* file, TestFunc func);
-static int test_encoding(const char* line, char* cp[], int cn);
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int test_short_code(const char* line, char* cp[], int cn);
+#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
+static int test_encoding(const char* line, char* cp[], int cn);
 static int test_validity(const char* line, char* cp[], int cn);
 #endif
 
@@ -23,9 +23,9 @@ int main()
         const char* file;
         TestFunc* func;
     } data[] = {
-        { "encodingTests.csv", test_encoding },
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
         { "shortCodeTests.csv", test_short_code },
+#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
+        { "encodingTests.csv", test_encoding },
         { "validityTests.csv", test_validity },
 #endif
     };
@@ -91,6 +91,7 @@ static int process_file(const char* file, TestFunc func)
     return count;
 }
 
+#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int test_encoding(const char* line, char* cp[], int cn)
 {
     if (cn != 7) {
@@ -118,7 +119,7 @@ static int test_encoding(const char* line, char* cp[], int cn)
     char encoded[256];
     Encode(&data_pos, len, encoded, 256);
     ok = strcmp(code, encoded) == 0;
-    printf("%-3.3s CODE [%s] [%s]\n", ok ? "OK" : "BAD", code, encoded);
+    printf("%-3.3s CODE [%s] [%s]\n", ok ? "OK" : "BAD", encoded, code);
 
     // Now decode the code and check we get the correct coordinates.
     OLC_CodeArea data_area;
@@ -138,14 +139,14 @@ static int test_encoding(const char* line, char* cp[], int cn)
     OLC_CodeArea_GetCenter(&decoded_area, &decoded_center);
 
     ok = fabs(data_center.lat - decoded_center.lat) < 1e-10;
-    printf("%-3.3s LAT [%f:%f]\n", ok ? "OK" : "BAD", data_center.lat, decoded_center.lat);
+    printf("%-3.3s LAT [%f:%f]\n", ok ? "OK" : "BAD", decoded_center.lat, data_center.lat);
     ok = fabs(data_center.lon - decoded_center.lon) < 1e-10;
-    printf("%-3.3s LON [%f:%f]\n", ok ? "OK" : "BAD", data_center.lon, decoded_center.lon);
+    printf("%-3.3s LON [%f:%f]\n", ok ? "OK" : "BAD", decoded_center.lon, data_center.lon);
 
     return 0;
 }
+#endif
 
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int test_short_code(const char* line, char* cp[], int cn)
 {
     if (cn != 5) {
@@ -161,6 +162,12 @@ static int test_short_code(const char* line, char* cp[], int cn)
     char* short_code = cp[3];
     char* type = cp[4];
 
+#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
+#else
+    if (strcmp(short_code, "2222+22") != 0) {
+        return 0;
+    }
+#endif
     OLC_LatLon reference;
     reference.lat = strtod(cp[1], 0);
     reference.lon = strtod(cp[2], 0);
@@ -182,6 +189,7 @@ static int test_short_code(const char* line, char* cp[], int cn)
     return 0;
 }
 
+#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int to_boolean(const char* s)
 {
     if (!s || s[0] == '\0') {
