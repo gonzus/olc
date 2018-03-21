@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <math.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "olc.h"
 
@@ -130,13 +131,13 @@ static int test_encoding(const char* line, char* cp[], int cn)
     data_area.len = len;
 
     OLC_LatLon data_center;
-    OLC_CodeArea_GetCenter(&data_area, &data_center);
+    GetCenter(&data_area, &data_center);
 
     OLC_CodeArea decoded_area;
     Decode(code, &decoded_area);
 
     OLC_LatLon decoded_center;
-    OLC_CodeArea_GetCenter(&decoded_area, &decoded_center);
+    GetCenter(&decoded_area, &decoded_center);
 
     ok = fabs(data_center.lat - decoded_center.lat) < 1e-10;
     printf("%-3.3s LAT [%f:%f]\n", ok ? "OK" : "BAD", decoded_center.lat, data_center.lat);

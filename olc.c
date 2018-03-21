@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <float.h>
 #include <math.h>
+#include <stdlib.h>
 #include "olc.h"
 
 static int sanitize(const char* code, char* sanitized, int maxlen,
@@ -113,6 +114,20 @@ static double adjust_latitude(double lat_degrees, size_t length)
     // Subtract half the code precision to get the latitude into the code area.
     double precision = compute_precision_for_length(length);
     return lat_degrees - precision / 2;
+}
+
+// Gets the center coordinates for an area
+void GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
+{
+    center->lat = area->lo.lat + (area->hi.lat - area->lo.lat) / 2.0;
+    if (center->lat > kLatMaxDegrees) {
+        center->lat = kLatMaxDegrees;
+    }
+
+    center->lon = area->lo.lon + (area->hi.lon - area->lo.lon) / 2.0;
+    if (center->lon > kLonMaxDegrees) {
+        center->lon = kLonMaxDegrees;
+    }
 }
 
 // Encodes positive range lat,lon into a sequence of OLC lat/lon pairs.
@@ -273,7 +288,7 @@ int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int 
     decode(sanitized, len, first_sep, first_pad, &code_area);
 
     OLC_LatLon center;
-    OLC_CodeArea_GetCenter(&code_area, &center);
+    GetCenter(&code_area, &center);
 
     // Ensure that latitude and longitude are valid.
     double lat = adjust_latitude(reference->lat, len);
@@ -357,7 +372,7 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* co
     decode(sanitized, pos, first_sep, first_pad, &code_rect);
 
     OLC_LatLon center;
-    OLC_CodeArea_GetCenter(&code_rect, &center);
+    GetCenter(&code_rect, &center);
 
     // How many degrees latitude is the code from the reference?
     if (lat + half_res < center.lat && center.lat - resolution > -kLatMaxDegrees) {

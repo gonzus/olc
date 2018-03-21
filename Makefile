@@ -12,10 +12,10 @@ ALL_FLAGS += -g
 %.o : %.c
 	$(CC) -c $(ALL_FLAGS) $(CFLAGS) $(CPPFLAGS) -o $@ $<
 
-example: codearea.o olc.o example.o
+example: olc.o example.o
 	$(CC) $(ALL_FLAGS) $^ -o $@
 
-test_csv: codearea.o olc.o test_csv.o
+test_csv: olc.o test_csv.o
 	$(CC) $(ALL_FLAGS) $^ -o $@
 
 clean:
