@@ -19,10 +19,12 @@ static const size_t kGridRows          = kEncodingBase / kGridCols;
 // Latitude bounds are -kLatMaxDegrees degrees and +kLatMaxDegrees degrees
 // which we transpose to 0 and 180 degrees.
 static const double kLatMaxDegrees     = 90;
+static const double kLatMaxDegreesT2   = 2 * kLatMaxDegrees;
 
 // Longitude bounds are -kLonMaxDegrees degrees and +kLonMaxDegrees degrees
 // which we transpose to 0 and 360 degrees.
 static const double kLonMaxDegrees     = 180;
+static const double kLonMaxDegreesT2   = 2 * kLonMaxDegrees;
 
 // These will be defined later, during runtime.
 static size_t kInitialExponent         = 0;
@@ -170,6 +172,7 @@ int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int 
     double alon = fabs(center.lon - lon);
     double range = alat > alon ? alat : alon;
 
+    // Yes, magic numbers... sob.
     int start = 0;
     const double safety_factor = 0.3;
     const int removal_lengths[3] = { 8, 6, 4 };
@@ -425,7 +428,7 @@ static int is_full(const char* sanitized, int len, int first_sep)
         // Work out what the first latitude character indicates for latitude.
         size_t firstLatValue = get_alphabet_position(toupper(sanitized[0]));
         firstLatValue *= kEncodingBase;
-        if (firstLatValue >= kLatMaxDegrees * 2) {
+        if (firstLatValue >= kLatMaxDegreesT2) {
             // The code would decode to a latitude of >= 90 degrees.
             return 0;
         }
@@ -434,7 +437,7 @@ static int is_full(const char* sanitized, int len, int first_sep)
         // Work out what the first longitude character indicates for longitude.
         size_t firstLonValue = get_alphabet_position(toupper(sanitized[1]));
         firstLonValue *= kEncodingBase;
-        if (firstLonValue >= kLonMaxDegrees * 2) {
+        if (firstLonValue >= kLonMaxDegreesT2) {
             // The code would decode to a longitude of >= 180 degrees.
             return 0;
         }
@@ -563,7 +566,7 @@ static void init_constants(void)
     inited = 1;
 
     // Work out the encoding base exponent necessary to represent 360 degrees.
-    kInitialExponent = floor(log(360) / log(kEncodingBase));
+    kInitialExponent = floor(log(kLonMaxDegreesT2) / log(kEncodingBase));
 
     // Work out the enclosing resolution (in degrees) for the grid algorithm.
     kGridSizeDegrees = 1 / pow(kEncodingBase, kPairCodeLength / 2 - (kInitialExponent + 1));
@@ -588,11 +591,12 @@ static double pow_neg(double base, double exponent)
 // different precisions due to the grid method having fewer columns than rows.
 static double compute_precision_for_length(int length)
 {
-    if (length <= 10) {
+    // Magic numbers!
+    if (length <= kPairCodeLength) {
         return pow_neg(kEncodingBase, floor((length / -2) + 2));
     }
 
-    return pow_neg(kEncodingBase, -3) / pow(5, length - 10);
+    return pow_neg(kEncodingBase, -3) / pow(5, length - kPairCodeLength);
 }
 
 // Finds the position of a char in the encoding alphabet.
@@ -610,10 +614,10 @@ static int get_alphabet_position(char c)
 static double normalize_longitude(double lon_degrees)
 {
     while (lon_degrees < -kLonMaxDegrees) {
-        lon_degrees += 360.0;
+        lon_degrees += kLonMaxDegreesT2;
     }
     while (lon_degrees >= kLonMaxDegrees) {
-        lon_degrees -= 360.0;
+        lon_degrees -= kLonMaxDegreesT2;
     }
     return lon_degrees;
 }
@@ -622,11 +626,11 @@ static double normalize_longitude(double lon_degrees)
 // generated.
 static double adjust_latitude(double lat_degrees, size_t length)
 {
-    if (lat_degrees < -90.0) {
-        lat_degrees = -90.0;
+    if (lat_degrees < -kLatMaxDegrees) {
+        lat_degrees = -kLatMaxDegrees;
     }
-    if (lat_degrees >  90.0) {
-        lat_degrees =  90.0;
+    if (lat_degrees >  kLatMaxDegrees) {
+        lat_degrees =  kLatMaxDegrees;
     }
     if (lat_degrees < kLatMaxDegrees) {
         return lat_degrees;
