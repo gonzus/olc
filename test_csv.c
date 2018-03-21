@@ -5,18 +5,14 @@
 #include <string.h>
 #include "olc.h"
 
-#define TEST_SINGLE 0
-
 #define BASE_PATH "test_data"
 
 typedef int (TestFunc)(const char* line, char* cp[], int cn);
 
 static int process_file(const char* file, TestFunc func);
 static int test_short_code(const char* line, char* cp[], int cn);
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int test_encoding(const char* line, char* cp[], int cn);
 static int test_validity(const char* line, char* cp[], int cn);
-#endif
 
 int main()
 {
@@ -25,10 +21,8 @@ int main()
         TestFunc* func;
     } data[] = {
         { "shortCodeTests.csv", test_short_code },
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
         { "encodingTests.csv", test_encoding },
         { "validityTests.csv", test_validity },
-#endif
     };
     for (int j = 0; j < sizeof(data) / sizeof(data[0]); ++j) {
         int records = process_file(data[j].file, data[j].func);
@@ -92,7 +86,6 @@ static int process_file(const char* file, TestFunc func)
     return count;
 }
 
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int test_encoding(const char* line, char* cp[], int cn)
 {
     if (cn != 7) {
@@ -104,12 +97,6 @@ static int test_encoding(const char* line, char* cp[], int cn)
     int ok = 0;
 
     char* code = cp[0];
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
-#else
-    if (strcmp(code, "7FG49Q00+") != 0) {
-        return 0;
-    }
-#endif
     int len = CodeLength(code);
 
     OLC_LatLon data_pos;
@@ -146,7 +133,6 @@ static int test_encoding(const char* line, char* cp[], int cn)
 
     return 0;
 }
-#endif
 
 static int test_short_code(const char* line, char* cp[], int cn)
 {
@@ -163,12 +149,6 @@ static int test_short_code(const char* line, char* cp[], int cn)
     char* short_code = cp[3];
     char* type = cp[4];
 
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
-#else
-    if (strcmp(short_code, "2222+22") != 0) {
-        return 0;
-    }
-#endif
     OLC_LatLon reference;
     reference.lat = strtod(cp[1], 0);
     reference.lon = strtod(cp[2], 0);
@@ -190,7 +170,6 @@ static int test_short_code(const char* line, char* cp[], int cn)
     return 0;
 }
 
-#if !defined(TEST_SINGLE) || TEST_SINGLE <= 0
 static int to_boolean(const char* s)
 {
     if (!s || s[0] == '\0') {
@@ -231,4 +210,3 @@ static int test_validity(const char* line, char* cp[], int cn)
 
     return 0;
 }
-#endif
