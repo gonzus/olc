@@ -27,8 +27,9 @@ static const double kLonMaxDegrees     = 180;
 static const double kLonMaxDegreesT2   = 2 * kLonMaxDegrees;
 
 // These will be defined later, during runtime.
-static size_t kInitialExponent         = 0;
-static double kGridSizeDegrees         = 0.0;
+static size_t kInitialExponent          = 0;
+static double kGridSizeDegrees          = 0.0;
+static double kInitialResolutionDegrees = 0.0;
 
 // Helper functions
 static int sanitize(const char* code, char* sanitized, int maxlen,
@@ -578,6 +579,9 @@ static void init_constants(void)
 
     // Work out the enclosing resolution (in degrees) for the grid algorithm.
     kGridSizeDegrees = 1 / pow(kEncodingBase, kPairCodeLength / 2 - (kInitialExponent + 1));
+
+    // Work out the initial resolution
+    kInitialResolutionDegrees = pow(kEncodingBase, kInitialExponent);
 }
 
 // Raises a number to an exponent, handling negative exponents.
@@ -662,7 +666,7 @@ static int encode_pairs(double lat, double lon, size_t length, char* code, int m
     init_constants();
 
     int pos = 0;
-    double resolution_degrees = pow(kEncodingBase, kInitialExponent);
+    double resolution_degrees = kInitialResolutionDegrees;
     // Add two digits on each pass.
     for (size_t digit_count = 0;
          digit_count < length;
