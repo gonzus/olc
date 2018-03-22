@@ -97,13 +97,13 @@ static int test_encoding(const char* line, char* cp[], int cn)
     int ok = 0;
 
     char* code = cp[0];
-    int len = CodeLength(code);
+    int len = OLC_CodeLength(code);
 
     OLC_LatLon data_pos = { strtod(cp[1], 0), strtod(cp[2], 0) };
 
     // Encode the test location and make sure we get the expected code.
     char encoded[256];
-    Encode(&data_pos, len, encoded, 256);
+    OLC_Encode(&data_pos, len, encoded, 256);
     ok = strcmp(code, encoded) == 0;
     printf("%-3.3s CODE [%s] [%s]\n", ok ? "OK" : "BAD", encoded, code);
 
@@ -115,13 +115,13 @@ static int test_encoding(const char* line, char* cp[], int cn)
     };
 
     OLC_LatLon data_center;
-    GetCenter(&data_area, &data_center);
+    OLC_GetCenter(&data_area, &data_center);
 
     OLC_CodeArea decoded_area;
-    Decode(code, &decoded_area);
+    OLC_Decode(code, &decoded_area);
 
     OLC_LatLon decoded_center;
-    GetCenter(&decoded_area, &decoded_center);
+    OLC_GetCenter(&decoded_area, &decoded_center);
 
     ok = fabs(data_center.lat - decoded_center.lat) < 1e-10;
     printf("%-3.3s LAT [%f:%f]\n", ok ? "OK" : "BAD", decoded_center.lat, data_center.lat);
@@ -150,14 +150,14 @@ static int test_short_code(const char* line, char* cp[], int cn)
 
     // Shorten the code using the reference location and check.
     if (strcmp(type, "B") == 0 || strcmp(type, "S") == 0) {
-        Shorten(full_code, &reference, code, 256);
+        OLC_Shorten(full_code, &reference, code, 256);
         ok = strcmp(short_code, code) == 0;
         printf("%-3.3s SHORTEN [%s]: [%s] [%s]\n", ok ? "OK" : "BAD", full_code, short_code, code);
     }
 
     // Now extend the code using the reference location and check.
     if (strcmp(type, "B") == 0 || strcmp(type, "R") == 0) {
-        RecoverNearest(short_code, &reference, code, 256);
+        OLC_RecoverNearest(short_code, &reference, code, 256);
         ok = strcmp(full_code, code) == 0;
         printf("%-3.3s RECOVER [%s]: [%s] [%s]\n", ok ? "OK" : "BAD", short_code, full_code, code);
     }
@@ -194,13 +194,13 @@ static int test_validity(const char* line, char* cp[], int cn)
     int is_short = to_boolean(cp[2]);
     int is_full = to_boolean(cp[3]);
 
-    ok = IsValid(code) == is_valid;
+    ok = OLC_IsValid(code) == is_valid;
     printf("%-3.3s IsValid [%s]: [%d]\n", ok ? "OK" : "BAD", code, is_valid);
 
-    ok = IsFull(code) == is_full;
+    ok = OLC_IsFull(code) == is_full;
     printf("%-3.3s IsFull [%s]: [%d]\n", ok ? "OK" : "BAD", code, is_full);
 
-    ok = IsShort(code) == is_short;
+    ok = OLC_IsShort(code) == is_short;
     printf("%-3.3s IsShort [%s]: [%d]\n", ok ? "OK" : "BAD", code, is_short);
 
     return 0;

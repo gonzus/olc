@@ -50,7 +50,7 @@ static int encode_grid(double lat, double lon, size_t length,
                        char* code, int maxlen);
 
 
-void GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
+void OLC_GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
 {
     center->lat = area->lo.lat + (area->hi.lat - area->lo.lat) / 2.0;
     if (center->lat > kLatMaxDegrees) {
@@ -63,7 +63,7 @@ void GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
     }
 }
 
-size_t CodeLength(const char* code)
+size_t OLC_CodeLength(const char* code)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -72,7 +72,7 @@ size_t CodeLength(const char* code)
     return code_length(len, first_sep, first_pad);
 }
 
-int IsValid(const char* code)
+int OLC_IsValid(const char* code)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -81,7 +81,7 @@ int IsValid(const char* code)
     return len > 0;
 }
 
-int IsShort(const char* code)
+int OLC_IsShort(const char* code)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -90,7 +90,7 @@ int IsShort(const char* code)
     return is_short(sanitized, len, first_sep);
 }
 
-int IsFull(const char* code)
+int OLC_IsFull(const char* code)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -99,7 +99,8 @@ int IsFull(const char* code)
     return is_full(sanitized, len, first_sep);
 }
 
-int Encode(const OLC_LatLon* location, size_t length, char* code, int maxlen)
+int OLC_Encode(const OLC_LatLon* location, size_t length,
+               char* code, int maxlen)
 {
     int pos = 0;
 
@@ -124,12 +125,13 @@ int Encode(const OLC_LatLon* location, size_t length, char* code, int maxlen)
     return pos;
 }
 
-int EncodeDefault(const OLC_LatLon* location, char* code, int maxlen)
+int OLC_EncodeDefault(const OLC_LatLon* location,
+                      char* code, int maxlen)
 {
-    return Encode(location, kPairCodeLength, code, maxlen);
+    return OLC_Encode(location, kPairCodeLength, code, maxlen);
 }
 
-int Decode(const char* code, OLC_CodeArea* decoded)
+int OLC_Decode(const char* code, OLC_CodeArea* decoded)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -141,7 +143,8 @@ int Decode(const char* code, OLC_CodeArea* decoded)
     return decode(sanitized, len, first_sep, first_pad, decoded);
 }
 
-int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int maxlen)
+int OLC_Shorten(const char* code, const OLC_LatLon* reference,
+                char* shortened, int maxlen)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -161,7 +164,7 @@ int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int 
     decode(sanitized, len, first_sep, first_pad, &code_area);
 
     OLC_LatLon center;
-    GetCenter(&code_area, &center);
+    OLC_GetCenter(&code_area, &center);
 
     // Ensure that latitude and longitude are valid.
     double lat = adjust_latitude(reference->lat, len);
@@ -195,7 +198,8 @@ int Shorten(const char* code, const OLC_LatLon* reference, char* shortened, int 
     return pos;
 }
 
-int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* code, int maxlen)
+int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
+                       char* code, int maxlen)
 {
     char sanitized[CODE_BUF_SIZE];
     int first_sep = -1;
@@ -226,7 +230,7 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* co
     // Use the reference location to pad the supplied short code and decode it.
     OLC_LatLon latlon = {lat, lon};
     char encoded[CODE_BUF_SIZE];
-    EncodeDefault(&latlon, encoded, CODE_BUF_SIZE);
+    OLC_EncodeDefault(&latlon, encoded, CODE_BUF_SIZE);
 
     char new_code[CODE_BUF_SIZE];
     int pos = 0;
@@ -246,7 +250,7 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* co
     decode(sanitized, pos, first_sep, first_pad, &code_rect);
 
     OLC_LatLon center;
-    GetCenter(&code_rect, &center);
+    OLC_GetCenter(&code_rect, &center);
 
     // How many degrees latitude is the code from the reference?
     if (lat + half_res < center.lat && center.lat - resolution > -kLatMaxDegrees) {
@@ -266,8 +270,11 @@ int RecoverNearest(const char* short_code, const OLC_LatLon* reference, char* co
         center.lon += resolution;
     }
 
-    return Encode(&center, len + padding_length, code, maxlen);
+    return OLC_Encode(&center, len + padding_length, code, maxlen);
 }
+
+
+// private functions
 
 static int sanitize(const char* code, char* sanitized, int maxlen,
                     int* first_sep, int* first_pad)
@@ -446,7 +453,8 @@ static int is_full(const char* sanitized, int len, int first_sep)
     return 1;
 }
 
-static int decode(char* sanitized, int len, int first_sep, int first_pad, OLC_CodeArea* decoded)
+static int decode(char* sanitized, int len, int first_sep, int first_pad,
+                  OLC_CodeArea* decoded)
 {
     // HACK: remember whether we shifted away the separator, so that we can
     // correct the code length at the end.
@@ -701,7 +709,8 @@ static int encode_pairs(double lat, double lon, size_t length, char* code, int m
 //
 // This allows default accuracy OLC codes to be refined with just a single
 // character.
-static int encode_grid(double lat, double lon, size_t length, char* code, int maxlen)
+static int encode_grid(double lat, double lon, size_t length,
+                       char* code, int maxlen)
 {
     if ((length + 1) >= maxlen) {
         code[0] = '\0';

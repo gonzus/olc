@@ -10,3 +10,6 @@ Try the following:
 
     # run tests based on CSV data files (copied from the original project)
     make && ./test_csv
+
+    # that last command outputs a lot; this only shows failing tests
+    make && ./test_csv | egrep BAD
