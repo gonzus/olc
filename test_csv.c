@@ -7,12 +7,13 @@
 
 #define BASE_PATH "test_data"
 
-typedef int (TestFunc)(const char* line, char* cp[], int cn);
+typedef int (TestFunc)(char* cp[], int cn);
+
+static int test_short_code(char* cp[], int cn);
+static int test_encoding(char* cp[], int cn);
+static int test_validity(char* cp[], int cn);
 
 static int process_file(const char* file, TestFunc func);
-static int test_short_code(const char* line, char* cp[], int cn);
-static int test_encoding(const char* line, char* cp[], int cn);
-static int test_validity(const char* line, char* cp[], int cn);
 
 int main(int argc, char* argv[])
 {
@@ -78,7 +79,7 @@ static int process_file(const char* file, TestFunc func)
         if (cn <= 0) {
             continue;
         }
-        func(line, cp, cn);
+        func(cp, cn);
         ++count;
     }
     fclose(fp);
@@ -86,7 +87,7 @@ static int process_file(const char* file, TestFunc func)
     return count;
 }
 
-static int test_encoding(const char* line, char* cp[], int cn)
+static int test_encoding(char* cp[], int cn)
 {
     if (cn != 7) {
         printf("test_encoding needs 7 columns per row, not %d\n", cn);
@@ -131,7 +132,7 @@ static int test_encoding(const char* line, char* cp[], int cn)
     return 0;
 }
 
-static int test_short_code(const char* line, char* cp[], int cn)
+static int test_short_code(char* cp[], int cn)
 {
     if (cn != 5) {
         printf("test_short_code needs 5 columns per row, not %d\n", cn);
@@ -180,7 +181,7 @@ static int to_boolean(const char* s)
     return 1;
 }
 
-static int test_validity(const char* line, char* cp[], int cn)
+static int test_validity(char* cp[], int cn)
 {
     if (cn != 4) {
         printf("test_validity needs 4 columns per row, not %d\n", cn);
