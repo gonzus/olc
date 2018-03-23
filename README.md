@@ -1,4 +1,4 @@
-A C implementation of Google's Open Location Code
+A C implementation of Google's [Open Location Code](https://plus.codes/).
 
 Based on the project's C++ implementation, this is pure C, aiming for
 efficiency and simplicity.
