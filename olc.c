@@ -1,6 +1,7 @@
 #include <ctype.h>
 #include <float.h>
 #include <math.h>
+#include <memory.h>
 #include <stdlib.h>
 #include "olc.h"
 
@@ -31,14 +32,22 @@ static size_t kInitialExponent          = 0;
 static double kGridSizeDegrees          = 0.0;
 static double kInitialResolutionDegrees = 0.0;
 
+typedef struct CodeInfo {
+    const char* code;
+    int len;
+    int sep_first;
+    int sep_last;
+    int pad_first;
+    int pad_last;
+} CodeInfo;
+
 // Helper functions
-static int sanitize(const char* code, char* sanitized, int maxlen,
-                    int* first_sep, int* first_pad);
-static int is_short(const char* sanitized, int len, int first_sep);
-static int is_full(const char* sanitized, int len, int first_sep);
-static int decode(char* sanitized, int len, int first_sep, int first_pad,
-                  OLC_CodeArea* decoded);
-static size_t code_length(int len, int first_sep, int first_pad);
+static int sanitize(const char* code, CodeInfo* info);
+static int is_short(CodeInfo* info);
+static int is_full(CodeInfo* info);
+static int decode(CodeInfo* info, OLC_CodeArea* decoded);
+static size_t code_length(CodeInfo* info);
+
 static void init_constants(void);
 static double pow_neg(double base, double exponent);
 static double compute_precision_for_length(int length);
@@ -66,38 +75,33 @@ void OLC_GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
 
 size_t OLC_CodeLength(const char* code)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    return code_length(len, first_sep, first_pad);
+    CodeInfo info;
+    sanitize(code, &info);
+    return code_length(&info);
 }
 
 int OLC_IsValid(const char* code)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    return len > 0;
+    CodeInfo info;
+    return sanitize(code, &info) > 0;
 }
 
 int OLC_IsShort(const char* code)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    return is_short(sanitized, len, first_sep);
+    CodeInfo info;
+    if (sanitize(code, &info) <= 0) {
+        return 0;
+    }
+    return is_short(&info);
 }
 
 int OLC_IsFull(const char* code)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    return is_full(sanitized, len, first_sep);
+    CodeInfo info;
+    if (sanitize(code, &info) <= 0) {
+        return 0;
+    }
+    return is_full(&info);
 }
 
 int OLC_Encode(const OLC_LatLon* location, size_t length,
@@ -134,41 +138,34 @@ int OLC_EncodeDefault(const OLC_LatLon* location,
 
 int OLC_Decode(const char* code, OLC_CodeArea* decoded)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    if (len <= 0) {
+    CodeInfo info;
+    if (sanitize(code, &info) <= 0) {
         return 0;
     }
-    return decode(sanitized, len, first_sep, first_pad, decoded);
+    return decode(&info, decoded);
 }
 
 int OLC_Shorten(const char* code, const OLC_LatLon* reference,
                 char* shortened, int maxlen)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    if (len <= 0) {
+    CodeInfo info;
+    if (sanitize(code, &info) <= 0) {
         return 0;
     }
-    if (!is_full(sanitized, len, first_sep)) {
+    if (info.pad_first > 0) {
         return 0;
     }
-    if (first_pad > 0) {
+    if (!is_full(&info)) {
         return 0;
     }
 
     OLC_CodeArea code_area;
-    decode(sanitized, len, first_sep, first_pad, &code_area);
-
+    decode(&info, &code_area);
     OLC_LatLon center;
     OLC_GetCenter(&code_area, &center);
 
     // Ensure that latitude and longitude are valid.
-    double lat = adjust_latitude(reference->lat, len);
+    double lat = adjust_latitude(reference->lat, info.len);
     double lon = normalize_longitude(reference->lon);
 
     // How close are the latitude and longitude to the code center.
@@ -202,25 +199,21 @@ int OLC_Shorten(const char* code, const OLC_LatLon* reference,
 int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
                        char* code, int maxlen)
 {
-    char sanitized[CODE_BUF_SIZE];
-    int first_sep = -1;
-    int first_pad = -1;
-    int len = sanitize(short_code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
-    if (len <= 0) {
+    CodeInfo info;
+    if (sanitize(short_code, &info) <= 0) {
         return 0;
     }
-    len = code_length(len, first_sep, first_pad);
-
-    if (!is_short(sanitized, len, first_sep)) {
+    if (!is_short(&info)) {
         return 0;
     }
+    int len = code_length(&info);
 
     // Ensure that latitude and longitude are valid.
     double lat = adjust_latitude(reference->lat, len);
     double lon = normalize_longitude(reference->lon);
 
     // Compute the number of digits we need to recover.
-    size_t padding_length = kSeparatorPosition - first_sep;
+    size_t padding_length = kSeparatorPosition - info.sep_first;
 
     // The resolution (height and width) of the padded area in degrees.
     double resolution = pow_neg(kEncodingBase, 2.0 - (padding_length / 2.0));
@@ -245,13 +238,14 @@ int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
         new_code[pos++] = short_code[j];
     }
     new_code[pos] = '\0';
-    pos = sanitize(new_code, sanitized, CODE_BUF_SIZE, &first_sep, &first_pad);
+    if (sanitize(new_code, &info) <= 0) {
+        return 0;
+    }
 
-    OLC_CodeArea code_rect;
-    decode(sanitized, pos, first_sep, first_pad, &code_rect);
-
+    OLC_CodeArea code_area;
+    decode(&info, &code_area);
     OLC_LatLon center;
-    OLC_GetCenter(&code_rect, &center);
+    OLC_GetCenter(&code_area, &center);
 
     // How many degrees latitude is the code from the reference?
     if (lat + half_res < center.lat && center.lat - resolution > -kLatMaxDegrees) {
@@ -277,224 +271,203 @@ int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
 
 // private functions
 
-static int sanitize(const char* code, char* sanitized, int maxlen,
-                    int* first_sep, int* first_pad)
+static int sanitize(const char* code, CodeInfo* info)
 {
-    int len = 0;
-    sanitized[0] = '\0';
-    *first_sep = -1;
-    *first_pad = -1;
+    memset(info, 0, sizeof(CodeInfo));
 
     // null code is not valid
     if (!code) {
         return 0;
     }
 
-    int pad_first = -1;
-    int pad_last = -1;
-    int sep_first = -1;
-    int sep_last = -1;
-    for (int j = 0; code[j] != '\0'; ++j) {
-        int found = 0;
+    info->code = code;
+    info->sep_first = -1;
+    info->sep_last = -1;
+    info->pad_first = -1;
+    info->pad_last = -1;
+    int j = 0;
+    for (j = 0; code[j] != '\0'; ++j) {
+        int ok = 0;
 
         // if this is a padding character, remember it
-        if (!found && code[j] == kPaddingCharacter) {
-            if (pad_first < 0) {
-                pad_first = j;
+        if (!ok && code[j] == kPaddingCharacter) {
+            if (info->pad_first < 0) {
+                info->pad_first = j;
             }
-            pad_last = j;
-            found = 1;
+            info->pad_last = j;
+            ok = 1;
         }
 
         // if this is a separator character, remember it
-        if (!found && code[j] == kSeparator) {
-            if (sep_first < 0) {
-                sep_first = j;
+        if (!ok && code[j] == kSeparator) {
+            if (info->sep_first < 0) {
+                info->sep_first = j;
             }
-            sep_last = j;
-            found = 1;
+            info->sep_last = j;
+            ok = 1;
         }
 
-        // any invalid character messes us up
-        if (!found && get_alphabet_position(toupper(code[j])) >= 0) {
-            found = 1;
+        // only accept characters in the valid character set
+        if (!ok && get_alphabet_position(toupper(code[j])) >= 0) {
+            ok = 1;
         }
 
         // didn't find anything expected => bail out
-        if (!found) {
-            sanitized[0] = '\0';
+        if (!ok) {
             return 0;
         }
-
-        sanitized[len++] = code[j];
     }
-    sanitized[len] = '\0';
+
+    // so far, code only has valid characters -- good
+    info->len = j;
 
     // Cannot be empty
-    if (len <= 0) {
+    if (info->len <= 0) {
         return 0;
     }
 
     // The separator is required.
-    if (sep_first < 0) {
+    if (info->sep_first < 0) {
         return 0;
     }
 
     // There can be only one... separator.
-    if (sep_last > sep_first) {
+    if (info->sep_last > info->sep_first) {
         return 0;
     }
 
-    // Is the separator the only character?
-    if (len == 1) {
+    // separator cannot be the only character
+    if (info->len == 1) {
         return 0;
     }
 
     // Is the separator in an illegal position?
-    if (sep_first > kSeparatorPosition || (sep_first % 2)) {
+    if (info->sep_first > kSeparatorPosition || (info->sep_first % 2)) {
+        return 0;
+    }
+
+    // padding cannot be at the initial position
+    if (info->pad_first == 0) {
         return 0;
     }
 
     // We can have an even number of padding characters before the separator,
     // but then it must be the final character.
-    if (pad_first >= 0) {
+    if (info->pad_first > 0) {
         // The first padding character needs to be in an odd position.
-        if (pad_first == 0 || (pad_first % 2)) {
-            return 0;
-        }
-
-        // Padded codes must not have anything after the separator
-        if (len > sep_first + 1) {
+        if (info->pad_first % 2) {
             return 0;
         }
 
         // With padding, the separator must be the final character
-        if (sep_last < len - 1) {
+        if (info->sep_last < info->len - 1) {
             return 0;
         }
 
         // After removing padding characters, we mustn't have anything left.
-        if (pad_last < sep_first - 1) {
+        if (info->pad_last < info->sep_first - 1) {
             return 0;
         }
     }
 
     // If there are characters after the separator, make sure there isn't just
     // one of them (not legal).
-    if ((len - sep_first - 1) == 1) {
+    if (info->len - info->sep_first - 1 == 1) {
         return 0;
     }
 
     // Make sure the code does not have too many digits in total.
-    if ((len - 1) > kMaximumDigitCount) {
+    if (info->len - 1 > kMaximumDigitCount) {
         return 0;
     }
 
     // Make sure the code does not have too many digits after the separator.
     // The number of digits is the length of the code, minus the position of
     // the separator, minus one because the separator position is zero indexed.
-    if ((len - sep_first - 1) > (kMaximumDigitCount - kSeparatorPosition)) {
+    if (info->len - info->sep_first - 1 > kMaximumDigitCount - kSeparatorPosition) {
         return 0;
     }
 
-    *first_sep = sep_first;
-    *first_pad = pad_first;
-    return len;
+    return info->len;
 }
 
-static int is_short(const char* sanitized, int len, int first_sep)
+static int is_short(CodeInfo* info)
 {
-    if (len <= 0) {
+    if (info->len <= 0) {
         return 0;
     }
 
-    // If there are less characters than expected first_sep the SEPARATOR.
-    if (first_sep >= kSeparatorPosition) {
+    // if there is a separator, it cannot be beyond the valid position
+    if (info->sep_first >= kSeparatorPosition) {
         return 0;
     }
 
     return 1;
 }
 
-static int is_full(const char* sanitized, int len, int first_sep)
+static int valid_first_character(CodeInfo* info, int pos, double kMax)
 {
-    if (len <= 0) {
-        return 0;
+    if (info->len <= pos) {
+        return 1;
     }
 
-    // there must be a separator
-    if (first_sep < 0) {
+    // Work out what the first character indicates
+    size_t firstValue = get_alphabet_position(toupper(info->code[pos]));
+    firstValue *= kEncodingBase;
+    return firstValue < kMax;
+}
+
+static int is_full(CodeInfo* info)
+{
+    if (info->len <= 0) {
         return 0;
     }
 
     // If there are less characters than expected before the separator.
-    if (first_sep < kSeparatorPosition) {
+    if (info->sep_first < kSeparatorPosition) {
         return 0;
     }
 
-    if (len > 0) {
-        // Work out what the first latitude character indicates for latitude.
-        size_t firstLatValue = get_alphabet_position(toupper(sanitized[0]));
-        firstLatValue *= kEncodingBase;
-        if (firstLatValue >= kLatMaxDegreesT2) {
-            // The code would decode to a latitude of >= 90 degrees.
-            return 0;
-        }
+    // check first latitude character, if any
+    if (! valid_first_character(info, 0, kLatMaxDegreesT2)) {
+        return 0;
     }
-    if (len > 1) {
-        // Work out what the first longitude character indicates for longitude.
-        size_t firstLonValue = get_alphabet_position(toupper(sanitized[1]));
-        firstLonValue *= kEncodingBase;
-        if (firstLonValue >= kLonMaxDegreesT2) {
-            // The code would decode to a longitude of >= 180 degrees.
-            return 0;
-        }
+
+    // check first longitude character, if any
+    if (! valid_first_character(info, 1, kLonMaxDegreesT2)) {
+        return 0;
     }
 
     return 1;
 }
 
-static int decode(char* sanitized, int len, int first_sep, int first_pad,
-                  OLC_CodeArea* decoded)
+static int decode(CodeInfo* info, OLC_CodeArea* decoded)
 {
-    // HACK: remember whether we shifted away the separator, so that we can
-    // correct the code length at the end.
-    int fixed = 0;
-
-    // get rid of a possible separator by shifting all characters after it.
-    if (first_sep >= 0) {
-        for (int j = first_sep + 1; sanitized[j] != '\0'; ++j) {
-            sanitized[j-1] = sanitized[j];
-        }
-        sanitized[--len] = '\0';
-        if (first_pad >= first_sep) {
-            --first_pad;
-        }
-        fixed = 1;
-    }
-
     double resolution_degrees = kEncodingBase;
     OLC_LatLon lo = { 0, 0 };
     OLC_LatLon hi = { 0, 0 };
 
     // Up to the first 10 characters are encoded in pairs. Subsequent
     // characters represent grid squares.
-    int top = len;
-    if (first_pad >= 0) {
-        top = first_pad;
+    int top = info->len;
+    if (info->pad_first >= 0) {
+        top = info->pad_first;
     }
     if (top > kPairCodeLength) {
         top = kPairCodeLength;
+        top += info->sep_first >= 0 ? 1 : 0;
     }
 
-    for (size_t j = 0; j < top; resolution_degrees /= kEncodingBase) {
-        double value;
+    for (size_t j = 0; j < top; ) {
+        // skip separator if necessary
+        if (j == info->sep_first) {
+            ++j;
+            continue;
+        }
 
         // Current character represents latitude. Retrieve it and convert to
         // degrees (positive range).
-        value = get_alphabet_position(toupper(sanitized[j]));
-        value *= resolution_degrees;
-        lo.lat += value;
+        lo.lat += get_alphabet_position(toupper(info->code[j])) * resolution_degrees;
         hi.lat = lo.lat + resolution_degrees;
         if (j == top) {
             break;
@@ -503,17 +476,17 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad,
 
         // Current character represents longitude. Retrieve it and convert to
         // degrees (positive range).
-        value = get_alphabet_position(toupper(sanitized[j]));
-        value *= resolution_degrees;
-        lo.lon += value;
+        lo.lon += get_alphabet_position(toupper(info->code[j])) * resolution_degrees;
         hi.lon = lo.lon + resolution_degrees;
         if (j == top) {
             break;
         }
         ++j;
+
+        resolution_degrees /= kEncodingBase;
     }
 
-    if (first_pad > kPairCodeLength) {
+    if (info->pad_first > kPairCodeLength) {
         // Now do any grid square characters.  Adjust the resolution back a
         // step because we need the resolution of the entire grid, not a single
         // grid square.
@@ -524,14 +497,21 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad,
         OLC_LatLon resolution = { resolution_degrees, resolution_degrees };
 
         // Decode only up to the maximum digit count.
-        top = len;
+        top = info->len;
         if (top > kMaximumDigitCount) {
             top = kMaximumDigitCount;
         }
-        for (size_t j = kPairCodeLength; j < top; ++j) {
+        int bot = kPairCodeLength;
+        bot += info->sep_first >= 0 ? 1 : 0;
+        for (size_t j = bot; j < top; ++j) {
+            // skip separator if necessary
+            if (j == info->sep_first) {
+                continue;
+            }
+
             // Get the value of the current character and convert it to the
             // degree value.
-            size_t value = get_alphabet_position(toupper(sanitized[j]));
+            size_t value = get_alphabet_position(toupper(info->code[j]));
             size_t row = value / kGridCols;
             size_t col = value % kGridCols;
 
@@ -546,22 +526,22 @@ static int decode(char* sanitized, int len, int first_sep, int first_pad,
             hi.lon = lo.lon + resolution.lon;
         }
     }
-    len = code_length(len, first_sep, first_pad);
     decoded->lo.lat = lo.lat - kLatMaxDegrees;
     decoded->lo.lon = lo.lon - kLonMaxDegrees;
     decoded->hi.lat = hi.lat - kLatMaxDegrees;
     decoded->hi.lon = hi.lon - kLonMaxDegrees;
-    decoded->len = len + fixed;
-    return len;
+    decoded->len = code_length(info);
+    return decoded->len;
 }
 
-static size_t code_length(int len, int first_sep, int first_pad)
+static size_t code_length(CodeInfo* info)
 {
-    if (first_sep >= 0) {
+    int len = info->len;
+    if (info->sep_first >= 0) {
         --len;
     }
-    if (first_pad >= 0) {
-        len = first_pad;
+    if (info->pad_first >= 0) {
+        len = info->pad_first;
     }
     return len;
 }
