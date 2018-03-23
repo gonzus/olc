@@ -1,4 +1,7 @@
 *.o
 *.swp
+*.dSYM
 example
 test_csv
+crash-*
+slow-unit-*

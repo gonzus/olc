@@ -35,6 +35,7 @@ static double kInitialResolutionDegrees = 0.0;
 
 typedef struct CodeInfo {
     const char* code;
+    int size;
     int len;
     int sep_first;
     int sep_last;
@@ -43,7 +44,7 @@ typedef struct CodeInfo {
 } CodeInfo;
 
 // Helper functions
-static int analyse(const char* code, CodeInfo* info);
+static int analyse(const char* code, size_t size, CodeInfo* info);
 static int is_short(CodeInfo* info);
 static int is_full(CodeInfo* info);
 static int decode(CodeInfo* info, OLC_CodeArea* decoded);
@@ -74,32 +75,32 @@ void OLC_GetCenter(const OLC_CodeArea* area, OLC_LatLon* center)
     }
 }
 
-size_t OLC_CodeLength(const char* code)
+size_t OLC_CodeLength(const char* code, size_t size)
 {
     CodeInfo info;
-    analyse(code, &info);
+    analyse(code, size, &info);
     return code_length(&info);
 }
 
-int OLC_IsValid(const char* code)
+int OLC_IsValid(const char* code, size_t size)
 {
     CodeInfo info;
-    return analyse(code, &info) > 0;
+    return analyse(code, size, &info) > 0;
 }
 
-int OLC_IsShort(const char* code)
+int OLC_IsShort(const char* code, size_t size)
 {
     CodeInfo info;
-    if (analyse(code, &info) <= 0) {
+    if (analyse(code, size, &info) <= 0) {
         return 0;
     }
     return is_short(&info);
 }
 
-int OLC_IsFull(const char* code)
+int OLC_IsFull(const char* code, size_t size)
 {
     CodeInfo info;
-    if (analyse(code, &info) <= 0) {
+    if (analyse(code, size, &info) <= 0) {
         return 0;
     }
     return is_full(&info);
@@ -137,20 +138,20 @@ int OLC_EncodeDefault(const OLC_LatLon* location,
     return OLC_Encode(location, kPairCodeLength, code, maxlen);
 }
 
-int OLC_Decode(const char* code, OLC_CodeArea* decoded)
+int OLC_Decode(const char* code, size_t size, OLC_CodeArea* decoded)
 {
     CodeInfo info;
-    if (analyse(code, &info) <= 0) {
+    if (analyse(code, size, &info) <= 0) {
         return 0;
     }
     return decode(&info, decoded);
 }
 
-int OLC_Shorten(const char* code, const OLC_LatLon* reference,
+int OLC_Shorten(const char* code, size_t size, const OLC_LatLon* reference,
                 char* shortened, int maxlen)
 {
     CodeInfo info;
-    if (analyse(code, &info) <= 0) {
+    if (analyse(code, size, &info) <= 0) {
         return 0;
     }
     if (info.pad_first > 0) {
@@ -197,11 +198,11 @@ int OLC_Shorten(const char* code, const OLC_LatLon* reference,
     return pos;
 }
 
-int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
+int OLC_RecoverNearest(const char* short_code, size_t size, const OLC_LatLon* reference,
                        char* code, int maxlen)
 {
     CodeInfo info;
-    if (analyse(short_code, &info) <= 0) {
+    if (analyse(short_code, size, &info) <= 0) {
         return 0;
     }
     if (!is_short(&info)) {
@@ -242,7 +243,7 @@ int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
         new_code[pos++] = short_code[j];
     }
     new_code[pos] = '\0';
-    if (analyse(new_code, &info) <= 0) {
+    if (analyse(new_code, pos, &info) <= 0) {
         return 0;
     }
 
@@ -275,7 +276,7 @@ int OLC_RecoverNearest(const char* short_code, const OLC_LatLon* reference,
 
 // private functions
 
-static int analyse(const char* code, CodeInfo* info)
+static int analyse(const char* code, size_t size, CodeInfo* info)
 {
     memset(info, 0, sizeof(CodeInfo));
 
@@ -283,14 +284,18 @@ static int analyse(const char* code, CodeInfo* info)
     if (!code) {
         return 0;
     }
+    if (!size || size > kMaximumDigitCount) {
+        size = kMaximumDigitCount;
+    }
 
     info->code = code;
+    info->size = size;
     info->sep_first = -1;
     info->sep_last = -1;
     info->pad_first = -1;
     info->pad_last = -1;
     int j = 0;
-    for (j = 0; code[j] != '\0'; ++j) {
+    for (j = 0; j < size && code[j] != '\0'; ++j) {
         int ok = 0;
 
         // if this is a padding character, remember it
@@ -462,8 +467,11 @@ static int decode(CodeInfo* info, OLC_CodeArea* decoded)
         top = kPairCodeLength;
         CORRECT_IF_SEPARATOR(top, info);
     }
+    if (top > info->size) {
+        top = info->size;
+    }
 
-    for (size_t j = 0; j < top; ) {
+    for (size_t j = 0; j < top && info->code[j] != '\0'; ) {
         // skip separator if necessary
         if (j == info->sep_first) {
             ++j;
@@ -474,19 +482,19 @@ static int decode(CodeInfo* info, OLC_CodeArea* decoded)
         // degrees (positive range).
         lo.lat += get_alphabet_position(toupper(info->code[j])) * resolution_degrees;
         hi.lat = lo.lat + resolution_degrees;
+        ++j;
         if (j == top) {
             break;
         }
-        ++j;
 
         // Current character represents longitude. Retrieve it and convert to
         // degrees (positive range).
         lo.lon += get_alphabet_position(toupper(info->code[j])) * resolution_degrees;
         hi.lon = lo.lon + resolution_degrees;
+        ++j;
         if (j == top) {
             break;
         }
-        ++j;
 
         resolution_degrees /= kEncodingBase;
     }
@@ -495,7 +503,7 @@ static int decode(CodeInfo* info, OLC_CodeArea* decoded)
         // Now do any grid square characters.  Adjust the resolution back a
         // step because we need the resolution of the entire grid, not a single
         // grid square.
-        resolution_degrees *= kEncodingBase;
+        // resolution_degrees *= kEncodingBase;
 
         // With a grid, the latitude and longitude resolutions are no longer
         // equal.

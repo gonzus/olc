@@ -19,6 +19,7 @@ test_csv: olc.o test_csv.o
 	$(CC) $(ALL_FLAGS) $^ -o $@
 
 clean:
-	rm -f *.o
+	rm -f *.o crash-* slow-unit-*
+	rm -fr *.dSYM
 	rm -f example
 	rm -f test_csv

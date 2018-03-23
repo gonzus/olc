@@ -98,7 +98,7 @@ static int test_encoding(char* cp[], int cn)
     int ok = 0;
 
     char* code = cp[0];
-    int len = OLC_CodeLength(code);
+    int len = OLC_CodeLength(code, 0);
 
     OLC_LatLon data_pos = { strtod(cp[1], 0), strtod(cp[2], 0) };
 
@@ -119,7 +119,7 @@ static int test_encoding(char* cp[], int cn)
     OLC_GetCenter(&data_area, &data_center);
 
     OLC_CodeArea decoded_area;
-    OLC_Decode(code, &decoded_area);
+    OLC_Decode(code, 0, &decoded_area);
 
     OLC_LatLon decoded_center;
     OLC_GetCenter(&decoded_area, &decoded_center);
@@ -151,14 +151,14 @@ static int test_short_code(char* cp[], int cn)
 
     // Shorten the code using the reference location and check.
     if (strcmp(type, "B") == 0 || strcmp(type, "S") == 0) {
-        OLC_Shorten(full_code, &reference, code, 256);
+        OLC_Shorten(full_code, 0, &reference, code, 256);
         ok = strcmp(short_code, code) == 0;
         printf("%-3.3s SHORTEN [%s] [%s:%s]: [%s] [%s]\n", ok ? "OK" : "BAD", full_code, cp[1], cp[2], code, short_code);
     }
 
     // Now extend the code using the reference location and check.
     if (strcmp(type, "B") == 0 || strcmp(type, "R") == 0) {
-        OLC_RecoverNearest(short_code, &reference, code, 256);
+        OLC_RecoverNearest(short_code, 0, &reference, code, 256);
         ok = strcmp(full_code, code) == 0;
         printf("%-3.3s RECOVER [%s] [%s:%s]: [%s] [%s]\n", ok ? "OK" : "BAD", short_code, cp[1], cp[2], code, full_code);
     }
@@ -196,15 +196,15 @@ static int test_validity(char* cp[], int cn)
     int is_short = to_boolean(cp[2]);
     int is_full = to_boolean(cp[3]);
 
-    got = OLC_IsValid(code);
+    got = OLC_IsValid(code, 0);
     ok = got == is_valid;
     printf("%-3.3s IsValid [%s]: [%d] [%d]\n", ok ? "OK" : "BAD", code, got, is_valid);
 
-    got = OLC_IsFull(code);
+    got = OLC_IsFull(code, 0);
     ok = got == is_full;
     printf("%-3.3s IsFull [%s]: [%d] [%d]\n", ok ? "OK" : "BAD", code, got, is_full);
 
-    got = OLC_IsShort(code);
+    got = OLC_IsShort(code, 0);
     ok = got == is_short;
     printf("%-3.3s IsShort [%s]: [%d] [%d]\n", ok ? "OK" : "BAD", code, got, is_short);
 

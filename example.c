@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
 
     // Decodes a Plus+Code back into coordinates.
     OLC_CodeArea code_area;
-    OLC_Decode(code, &code_area);
+    OLC_Decode(code, 0, &code_area);
     printf("Code length: %14.10f : %14.10f to %14.10f : %14.10f (%lu)\n",
            code_area.lo.lat,
            code_area.lo.lon,
@@ -30,15 +30,15 @@ int main(int argc, char* argv[])
            code_area.len);
     // => 47.000062496 8.00006250000001 47.000062504 8.0000625305176 16
 
-    int is_valid = OLC_IsValid(code);
+    int is_valid = OLC_IsValid(code, 0);
     printf("Is Valid: %d\n", is_valid);
     // => true
 
-    int is_full = OLC_IsFull(code);
+    int is_full = OLC_IsFull(code, 0);
     printf("Is Full: %d\n", is_full);
     // => true
 
-    int is_short = OLC_IsShort(code);
+    int is_short = OLC_IsShort(code, 0);
     printf("Is Short: %d\n", is_short);
     // => true
 
@@ -46,12 +46,12 @@ int main(int argc, char* argv[])
     // longitude.
     location.lat = 51.3708675;
     location.lon = -1.217765625;
-    len = OLC_Shorten("9C3W9QCJ+2VX", &location, code, 256);
+    len = OLC_Shorten("9C3W9QCJ+2VX", 0, &location, code, 256);
     printf("Shortened: %s\n", code);
     // => "CJ+2VX"
 
     // Extends a Plus+Code by the given reference latitude and longitude.
-    OLC_RecoverNearest("CJ+2VX", &location, code, 256);
+    OLC_RecoverNearest("CJ+2VX", 0, &location, code, 256);
     printf("Recovered: %s\n", code);
     // => "9C3W9QCJ+2VX"
 
