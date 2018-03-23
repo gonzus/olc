@@ -5,3 +5,11 @@ example
 test_csv
 crash-*
 slow-unit-*
+
+fuzz/OLC_CodeLength
+fuzz/OLC_Decode
+fuzz/OLC_IsFull
+fuzz/OLC_IsShort
+fuzz/OLC_IsValid
+fuzz/OLC_RecoverNearest
+fuzz/OLC_Shorten
