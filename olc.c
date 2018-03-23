@@ -191,7 +191,7 @@ int OLC_Shorten(const char* code, size_t size, const OLC_LatLon* reference,
         }
     }
     int pos = 0;
-    for (int j = start; code[j] != '\0'; ++j) {
+    for (int j = start; j < info.size && code[j] != '\0'; ++j) {
         shortened[pos++] = code[j];
     }
     shortened[pos] = '\0';
@@ -239,7 +239,7 @@ int OLC_RecoverNearest(const char* short_code, size_t size, const OLC_LatLon* re
         }
         new_code[pos++] = encoded[j];
     }
-    for (int j = 0; short_code[j] != '\0'; ++j) {
+    for (int j = 0; j < info.size && short_code[j] != '\0'; ++j) {
         new_code[pos++] = short_code[j];
     }
     new_code[pos] = '\0';
